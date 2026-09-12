@@ -153,7 +153,7 @@ if __name__ == "__main__":
     invalidator = True
     while invalidator:
         offline_mode = input(
-            r'Run in offline mode? (this will use the latest local download in MtG_Importer\scryfall_oracle) Y/N')
+            r'Run in offline mode? (this will use the latest local download in MtG_Importer\scryfall_oracle) (Y/N) ')
         if offline_mode.lower() == 'y' or offline_mode.lower() == 'yes':
             offline_mode = True
             save_oracle = False
@@ -167,7 +167,7 @@ if __name__ == "__main__":
     if not offline_mode:
         invalidator = True
         while invalidator:
-            save_oracle = input(r'Save the oracle file for local use later? Y/N')
+            save_oracle = input(r'Save the oracle file for local use later? (Y/N) ')
             if save_oracle.lower() == 'y' or save_oracle.lower() == 'yes':
                 save_oracle = True
                 invalidator = False
