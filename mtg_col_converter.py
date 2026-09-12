@@ -1,18 +1,23 @@
 import datetime
 import os
 import shutil
+
+import pandas
 import pandas as pd
 import requests
+import gzip
+import io
 
 
 class MtgColConverter:
 
-    def __init__(self, import_path, export_path, archive_path, offline_path, offline_mode):
+    def __init__(self, import_path, export_path, archive_path, offline_path, offline_mode, save_oracle):
         self.import_path = import_path
         self.export_path = export_path
         self.archive_path = archive_path
         self.offline_path = offline_path
         self.offline_mode = offline_mode
+        self.save_oracle = save_oracle
         self.import_cols_to_drop = [
                            "Folder Name",
                            "Trade Quantity",
@@ -51,12 +56,17 @@ class MtgColConverter:
             print('Creating scryfall oracle via Bulk Data API')
             bulk_url = r"https://api.scryfall.com/bulk-data"
             bulk_json = requests.get(bulk_url, headers={"User-Agent": "Cherry's Formatting Helper"}).json()
-            download_uri = bulk_json["data"][1]["download_uri"]
+            download_uri = bulk_json["data"][1]["jsonl_download_uri"]
             try:
-                oracle_content = requests.get(download_uri).json()
-            except:
-                raise Exception("Unable to download scryfall oracle via Bulk Data API")
-            oracle_df = pd.DataFrame.from_dict(oracle_content, dtype=str)
+                response = requests.get(download_uri)
+                with gzip.open(io.BytesIO(response.content),'rt',encoding='utf-8') as oracle_jsonl:
+                    oracle_df = pandas.read_json(oracle_jsonl, lines = True)
+                if self.save_oracle:
+                    print('Saving scryfall oracle to local folder')
+                    save_path = offline_path + "\\scryfall_oracle_" + datetime.datetime.now().strftime("%b-%d-%Y_%H-%M-%S") + ".csv"
+                    oracle_df.to_csv(save_path, index=False)
+            except Exception as e:
+                print(f"Unable to download scryfall oracle via Bulk Data API due to error:\n {e}")
 
         if offline_mode:
             most_recent_file = None
@@ -68,7 +78,7 @@ class MtgColConverter:
                         most_recent_file = file
                         most_recent_time = modified_time
             print(f'Using {most_recent_file.name} as local scryfall oracle file')
-            oracle_df = pd.read_json(most_recent_file)
+            oracle_df = pd.read_csv(most_recent_file, low_memory=False)
 
         filtered_oracle_df = oracle_df[cols_to_keep]
         filtered_oracle_df = filtered_oracle_df[filtered_oracle_df.layout.isin(layouts_to_keep)]
@@ -146,6 +156,7 @@ if __name__ == "__main__":
             r'Run in offline mode? (this will use the latest local download in MtG_Importer\scryfall_oracle) Y/N')
         if offline_mode.lower() == 'y' or offline_mode.lower() == 'yes':
             offline_mode = True
+            save_oracle = False
             invalidator = False
         elif offline_mode.lower() == 'n' or offline_mode.lower() == 'no':
             offline_mode = False
@@ -153,7 +164,20 @@ if __name__ == "__main__":
         else:
             print('Please enter Y/N')
 
-    converter =MtgColConverter(import_path, export_path, archive_path, offline_path, offline_mode)
+    if not offline_mode:
+        invalidator = True
+        while invalidator:
+            save_oracle = input(r'Save the oracle file for local use later? Y/N')
+            if save_oracle.lower() == 'y' or save_oracle.lower() == 'yes':
+                save_oracle = True
+                invalidator = False
+            elif save_oracle.lower() == 'n' or save_oracle.lower() == 'no':
+                save_oracle = False
+                invalidator = False
+            else:
+                print('Please enter Y/N')
+
+    converter =MtgColConverter(import_path, export_path, archive_path, offline_path, offline_mode,save_oracle)
 
     converter.read_csvs()
     if not converter.df_list :
